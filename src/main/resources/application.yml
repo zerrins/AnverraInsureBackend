@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: anverraglobal-api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  jmx:
+    enabled: false
+
+server:
+  port: 8080
+  shutdown: graceful
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  sms:
+    api-url: ${SMS_API_URL:mock}
+    api-key: ${SMS_API_KEY:mock}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
