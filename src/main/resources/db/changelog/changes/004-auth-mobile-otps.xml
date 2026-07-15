@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Changeset: 004-1 — Create 'mobile_otps' table
+        Source: docs/04_data_model.md — Table: mobile_otps
+
+        Business rules (docs/05_business_rules.md §OTP Rules):
+          - 6-digit OTP, stored plain text, 5-minute expiry
+          - Max 3 wrong attempts (attempt_count column, NOT in original spec — added here)
+          - Rate limit: max 5 OTPs per phone per hour (enforced via countByPhoneNumberAndCreatedAtAfter)
+          - Scheduled cleanup: hourly job deletes expired records
+          - Phone in +91XXXXXXXXXX normalised format
+
+        Indexing strategy (docs/11_target_architecture.md §Indexing Strategy):
+          - Composite: (phone_number, purpose, verified, created_at) for OTP lookup + rate limit
+          - Single: expires_at for cleanup job
+    -->
+    <changeSet id="004-1" author="anverraglobal">
+        <comment>Create mobile_otps table for OTP-based authentication</comment>
+
+        <createTable tableName="mobile_otps">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_mobile_otps" nullable="false"/>
+            </column>
+
+            <!-- Normalised phone: +91XXXXXXXXXX format -->
+            <column name="phone_number" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- 6-digit plain text OTP code -->
+            <column name="otp_code" type="VARCHAR(10)">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Expiry: 5 minutes from created_at -->
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Verification flag — true once user confirms the OTP -->
+            <column name="verified" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Purpose enum: LOGIN, REGISTRATION, PHONE_VERIFICATION, PASSWORD_RESET -->
+            <column name="purpose" type="VARCHAR(30)"/>
+
+            <!-- Wrong attempt counter — max 3 before OTP is treated as invalid -->
+            <column name="attempt_count" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Creation timestamp — used for rate-limit count queries -->
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!--
+            Composite index covering:
+              1. OTP lookup: WHERE phone_number=? AND purpose=? AND verified=false AND expires_at>?
+              2. Rate-limit count: WHERE phone_number=? AND created_at > (now - 1 hour)
+            (docs/11_target_architecture.md — mobile_otps index)
+        -->
+        <createIndex tableName="mobile_otps" indexName="idx_mobile_otps_lookup">
+            <column name="phone_number"/>
+            <column name="purpose"/>
+            <column name="verified"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <!-- Dedicated phone index for simple existence queries -->
+        <createIndex tableName="mobile_otps" indexName="idx_mobile_otps_phone">
+            <column name="phone_number"/>
+        </createIndex>
+
+        <!-- Index on expires_at for efficient hourly cleanup DELETE -->
+        <createIndex tableName="mobile_otps" indexName="idx_mobile_otps_expires_at">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

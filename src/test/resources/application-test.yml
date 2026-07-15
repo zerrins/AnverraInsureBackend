@@ -1,0 +1,24 @@
+# Test profile — overrides local/dev settings for integration tests
+# PostgreSQL is provided by Testcontainers via @ServiceConnection (no explicit URL needed)
+
+spring:
+  # Disable Redis for tests — auth domain does not require Redis
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+
+logging:
+  level:
+    root: WARN
+    com.anverraglobal: INFO
+    org.liquibase: INFO

@@ -16,11 +16,20 @@ public class AppProperties {
 
     private String frontendUrl;
     private Sms sms = new Sms();
+    private Jwt jwt = new Jwt();
 
     @Getter
     @Setter
     public static class Sms {
         private String apiUrl;
         private String apiKey;
+    }
+
+    @Getter
+    @Setter
+    public static class Jwt {
+        private String secret = "======================AnverraGlobalSuperSecretKeyForJwtGenerationDoNotShare======================";
+        private long expirationMs = 86400000;
+        private long refreshExpirationMs = 604800000; // 7 days
     }
 }

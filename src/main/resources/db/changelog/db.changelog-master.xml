@@ -5,7 +5,17 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <!-- Include changelogs here -->
-    <!-- <include file="db/changelog/changes/001-initial-schema.xml"/> -->
+    <!-- Auth domain migrations — Phase 1 -->
+    <!-- 001: Initial placeholder (SELECT 1 — no-op) -->
+    <include file="db/changelog/changes/001-initial.sql"/>
+
+    <!-- 002: users, roles (seeded), user_roles, user_profiles -->
+    <include file="db/changelog/changes/002-auth-users.xml"/>
+
+    <!-- 003: refresh_tokens (JWT refresh token persistence) -->
+    <include file="db/changelog/changes/003-auth-refresh-tokens.xml"/>
+
+    <!-- 004: mobile_otps (OTP-based auth storage) -->
+    <include file="db/changelog/changes/004-auth-mobile-otps.xml"/>
 
 </databaseChangeLog>

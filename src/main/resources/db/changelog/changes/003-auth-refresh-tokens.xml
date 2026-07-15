@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Changeset: 003-1 — Create 'refresh_tokens' table
+        Purpose: Persist JWT refresh tokens for stateless revocation.
+        Not in the original docs/04_data_model.md but required by the
+        build plan (docs/12_build_execution_plan.md Phase 1 — JWT refresh token support).
+
+        Lifecycle:
+          - Created on successful login
+          - Looked up on token-refresh API calls
+          - Revoked on logout or password change
+          - Cleaned up by scheduled job (expired OR revoked)
+    -->
+    <changeSet id="003-1" author="anverraglobal">
+        <comment>Create refresh_tokens table for JWT refresh token persistence</comment>
+
+        <createTable tableName="refresh_tokens">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_refresh_tokens" nullable="false"/>
+            </column>
+
+            <!-- The opaque token string — unique, indexed for fast lookup -->
+            <column name="token" type="VARCHAR(512)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_refresh_tokens_token"/>
+            </column>
+
+            <!-- Owning user -->
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Token validity window -->
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Explicit revocation flag (e.g., on logout) -->
+            <column name="revoked" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Audit: when was this token issued -->
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="refresh_tokens"
+                baseColumnNames="user_id"
+                constraintName="fk_refresh_tokens_user"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <!-- Index on token for O(log n) lookup on every refresh request -->
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_tokens_token">
+            <column name="token"/>
+        </createIndex>
+
+        <!-- Index on user_id for bulk revocation on logout -->
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_tokens_user_id">
+            <column name="user_id"/>
+        </createIndex>
+
+        <!-- Index on expires_at for efficient scheduled cleanup queries -->
+        <createIndex tableName="refresh_tokens" indexName="idx_refresh_tokens_expires">
+            <column name="expires_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Changeset: 002-1 — Create 'users' table
+        Source: docs/04_data_model.md — Table: users
+        Notes:
+          - uuid generated at application level (@PrePersist), not DB default
+          - status stored as VARCHAR for JPA @Enumerated(STRING)
+          - reward_points default 100 per business rule (docs/05_business_rules.md §39)
+          - created_by_user_id is app-level provenance (nullable = self-registered)
+          - deleted + deleted_at support soft-delete
+          - created_by/updated_by are Spring Data Auditing principal name strings
+    -->
+    <changeSet id="002-1" author="anverraglobal">
+        <comment>Create users table — primary identity entity</comment>
+
+        <createTable tableName="users">
+            <!-- Primary key -->
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_users" nullable="false"/>
+            </column>
+
+            <!-- External identity -->
+            <column name="uuid" type="VARCHAR(36)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_users_uuid"/>
+            </column>
+
+            <!-- Credentials -->
+            <column name="email" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_users_email"/>
+            </column>
+            <column name="password" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Profile basics -->
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="phone" type="VARCHAR(20)">
+                <constraints unique="true" uniqueConstraintName="uq_users_phone"/>
+            </column>
+            <column name="profile_image" type="VARCHAR(500)"/>
+
+            <!-- Account status and security -->
+            <column name="status" type="VARCHAR(30)" defaultValue="PENDING_VERIFICATION">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email_verified" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="phone_verified" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="login_attempts" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="locked_until" type="TIMESTAMP"/>
+            <column name="last_login" type="TIMESTAMP"/>
+
+            <!-- Reward points — default 100, floor 0 (enforced at service layer) -->
+            <column name="reward_points" type="INTEGER" defaultValueNumeric="100">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- Provenance -->
+            <column name="created_by_user_id" type="BIGINT"/>
+
+            <!-- Soft delete -->
+            <column name="deleted" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deleted_at" type="TIMESTAMP"/>
+
+            <!-- Spring Data Auditing columns (from AuditableEntity) -->
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP"/>
+            <column name="created_by" type="VARCHAR(255)"/>
+            <column name="updated_by" type="VARCHAR(255)"/>
+        </createTable>
+
+        <!-- Indexes per docs/04_data_model.md and docs/11_target_architecture.md -->
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+        <createIndex tableName="users" indexName="idx_users_uuid">
+            <column name="uuid"/>
+        </createIndex>
+        <createIndex tableName="users" indexName="idx_users_phone">
+            <column name="phone"/>
+        </createIndex>
+        <createIndex tableName="users" indexName="idx_users_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="users" indexName="idx_users_deleted">
+            <column name="deleted"/>
+        </createIndex>
+    </changeSet>
+
+    <!--
+        Changeset: 002-2 — Create 'roles' reference table
+        Seeded with all 5 role values from docs/03_roles_and_permissions.md
+    -->
+    <changeSet id="002-2" author="anverraglobal">
+        <comment>Create roles reference table and seed all 5 roles</comment>
+
+        <createTable tableName="roles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_roles" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(30)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_roles_name"/>
+            </column>
+            <column name="description" type="VARCHAR(500)"/>
+        </createTable>
+
+        <!-- Seed all 5 roles -->
+        <insert tableName="roles">
+            <column name="name" value="ADMIN"/>
+            <column name="description" value="System administrator with full access to all entities"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="BROKER"/>
+            <column name="description" value="Organisation-level principal; policies belong to brokers"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="AGENT"/>
+            <column name="description" value="Individual insurance intermediary; creates and manages policies"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="SUB_AGENT"/>
+            <column name="description" value="Works under agents; earns outgoing commission"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="DE_AGENT"/>
+            <column name="description" value="Data Entry Agent; enters policies on behalf of agents"/>
+        </insert>
+    </changeSet>
+
+    <!--
+        Changeset: 002-3 — Create 'user_roles' join table
+        Source: docs/04_data_model.md — Table: user_roles
+    -->
+    <changeSet id="002-3" author="anverraglobal">
+        <comment>Create user_roles join table</comment>
+
+        <createTable tableName="user_roles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_user_roles" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="user_roles"
+                baseColumnNames="user_id"
+                constraintName="fk_user_roles_user"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <addUniqueConstraint
+                tableName="user_roles"
+                columnNames="user_id, role"
+                constraintName="uq_user_roles_user_role"/>
+
+        <createIndex tableName="user_roles" indexName="idx_user_roles_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="user_roles" indexName="idx_user_roles_role">
+            <column name="role"/>
+        </createIndex>
+    </changeSet>
+
+    <!--
+        Changeset: 002-4 — Create 'user_profiles' table
+        Source: docs/04_data_model.md — Table: user_profiles
+    -->
+    <changeSet id="002-4" author="anverraglobal">
+        <comment>Create user_profiles table (extended profile per user)</comment>
+
+        <createTable tableName="user_profiles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_user_profiles" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_user_profiles_user"/>
+            </column>
+
+            <!-- Personal details -->
+            <column name="date_of_birth" type="DATE"/>
+            <column name="gender" type="VARCHAR(10)"/>
+
+            <!-- Address -->
+            <column name="address_line1" type="VARCHAR(255)"/>
+            <column name="address_line2" type="VARCHAR(255)"/>
+            <column name="city" type="VARCHAR(100)"/>
+            <column name="state" type="VARCHAR(100)"/>
+            <column name="postal_code" type="VARCHAR(20)"/>
+            <column name="country" type="VARCHAR(100)" defaultValue="India"/>
+
+            <!-- Indian regulatory identifiers -->
+            <column name="pan_number" type="VARCHAR(10)"/>
+            <column name="aadhar_number" type="VARCHAR(12)"/>
+            <column name="gstin" type="VARCHAR(15)"/>
+
+            <!-- Banking details -->
+            <column name="bank_name" type="VARCHAR(100)"/>
+            <column name="bank_account_number" type="VARCHAR(30)"/>
+            <column name="bank_ifsc_code" type="VARCHAR(11)"/>
+
+            <!-- Emergency contact -->
+            <column name="emergency_contact_name" type="VARCHAR(255)"/>
+            <column name="emergency_contact_phone" type="VARCHAR(20)"/>
+
+            <!-- Professional identifiers -->
+            <column name="agent_code" type="VARCHAR(30)"/>
+            <column name="broker_code" type="VARCHAR(30)"/>
+            <column name="company" type="VARCHAR(255)"/>
+
+            <!-- Auditing (from AuditableEntity) -->
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+            <column name="created_by" type="VARCHAR(255)"/>
+            <column name="updated_by" type="VARCHAR(255)"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="user_profiles"
+                baseColumnNames="user_id"
+                constraintName="fk_user_profiles_user"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="user_profiles" indexName="idx_user_profiles_user">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
