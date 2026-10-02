@@ -73,7 +73,7 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("should find valid unverified unexpired OTP")
         void shouldFindValidOtp() {
             mobileOtpRepository.save(buildOtp("+919876543001", OtpPurpose.LOGIN, false));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             Optional<MobileOtp> found = mobileOtpRepository.findLatestValidOtp(
                     "+919876543001", OtpPurpose.LOGIN, LocalDateTime.now());
@@ -86,7 +86,7 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("should NOT find expired OTP")
         void shouldNotFindExpiredOtp() {
             mobileOtpRepository.save(buildOtp("+919876543002", OtpPurpose.LOGIN, true));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             Optional<MobileOtp> found = mobileOtpRepository.findLatestValidOtp(
                     "+919876543002", OtpPurpose.LOGIN, LocalDateTime.now());
@@ -100,7 +100,7 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
             MobileOtp otp = buildOtp("+919876543003", OtpPurpose.REGISTRATION, false);
             otp.setVerified(true);
             mobileOtpRepository.save(otp);
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             Optional<MobileOtp> found = mobileOtpRepository.findLatestValidOtp(
                     "+919876543003", OtpPurpose.REGISTRATION, LocalDateTime.now());
@@ -112,7 +112,7 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("should NOT find OTP for different purpose")
         void shouldNotFindOtpForDifferentPurpose() {
             mobileOtpRepository.save(buildOtp("+919876543004", OtpPurpose.LOGIN, false));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             Optional<MobileOtp> found = mobileOtpRepository.findLatestValidOtp(
                     "+919876543004", OtpPurpose.REGISTRATION, LocalDateTime.now());
@@ -132,7 +132,7 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
             mobileOtpRepository.save(buildOtp(phone, OtpPurpose.LOGIN, false));
             mobileOtpRepository.save(buildOtp(phone, OtpPurpose.LOGIN, false));
             mobileOtpRepository.save(buildOtp(phone, OtpPurpose.LOGIN, false));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             long count = mobileOtpRepository.countByPhoneNumberAndCreatedAtAfter(
                     phone, LocalDateTime.now().minusHours(1));
@@ -158,10 +158,10 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
         void shouldDeleteExpiredOnly() {
             MobileOtp active  = mobileOtpRepository.save(buildOtp("+919876543200", OtpPurpose.LOGIN, false));
             MobileOtp expired = mobileOtpRepository.save(buildOtp("+919876543201", OtpPurpose.LOGIN, true));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             mobileOtpRepository.deleteByExpiresAtBefore(LocalDateTime.now());
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             assertThat(mobileOtpRepository.findById(active.getId())).isPresent();
             assertThat(mobileOtpRepository.findById(expired.getId())).isEmpty();
@@ -178,10 +178,10 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
             String phone = "+919876543300";
             MobileOtp old1 = mobileOtpRepository.save(buildOtp(phone, OtpPurpose.REGISTRATION, false));
             MobileOtp old2 = mobileOtpRepository.save(buildOtp(phone, OtpPurpose.REGISTRATION, false));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             mobileOtpRepository.invalidatePreviousOtps(phone, OtpPurpose.REGISTRATION);
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             // Both should now be marked verified (invalidated)
             MobileOtp r1 = mobileOtpRepository.findById(old1.getId()).orElseThrow();
@@ -195,10 +195,10 @@ class MobileOtpRepositoryTest extends AbstractRepositoryTest {
         void shouldNotAffectDifferentPurpose() {
             String phone = "+919876543301";
             MobileOtp loginOtp = mobileOtpRepository.save(buildOtp(phone, OtpPurpose.LOGIN, false));
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             mobileOtpRepository.invalidatePreviousOtps(phone, OtpPurpose.REGISTRATION);
-            mobileOtpRepository.flush();
+            flushAndClear();
 
             MobileOtp reloaded = mobileOtpRepository.findById(loginOtp.getId()).orElseThrow();
             assertThat(reloaded.isVerified()).isFalse();

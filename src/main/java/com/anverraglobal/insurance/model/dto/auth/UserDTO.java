@@ -21,5 +21,6 @@ public class UserDTO {
     private String status;
     private boolean emailVerified;
     private boolean phoneVerified;
+    private String profileImage;
     private UserProfileDTO profile;
 }

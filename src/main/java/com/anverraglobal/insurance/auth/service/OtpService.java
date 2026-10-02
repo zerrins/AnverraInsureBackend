@@ -3,6 +3,7 @@ package com.anverraglobal.insurance.auth.service;
 import com.anverraglobal.insurance.auth.dto.OtpResponse;
 import com.anverraglobal.insurance.auth.entity.MobileOtp;
 import com.anverraglobal.insurance.auth.repository.MobileOtpRepository;
+import com.anverraglobal.insurance.auth.repository.UserRepository;
 import com.anverraglobal.insurance.exception.BadRequestException;
 import com.anverraglobal.insurance.model.enums.OtpPurpose;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +22,14 @@ import java.util.List;
 public class OtpService {
 
     private final MobileOtpRepository mobileOtpRepository;
+    private final UserRepository userRepository;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${app.otp.expose-in-response:false}")
     private boolean exposeOtpInResponse;
+
+    @Value("${app.otp.test-mode.enabled:false}")
+    private boolean testModeEnabled;
 
     private static final List<String> TEST_NUMBERS = List.of(
             "+919876543211", "+919876543212", "+919876543213", "+918050950295"
@@ -34,6 +39,20 @@ public class OtpService {
     public OtpResponse sendOtp(String phone, OtpPurpose purpose) {
         String normalizedPhone = normalizePhone(phone);
         
+        mobileOtpRepository.acquireAdvisoryLock(normalizedPhone + "_" + purpose.name());
+        
+        if (purpose == OtpPurpose.LOGIN) {
+            if (userRepository.findByPhoneAndDeletedFalse(normalizedPhone).isEmpty()) {
+                throw new BadRequestException("No account found with this phone number");
+            }
+        } else if (purpose == OtpPurpose.REGISTRATION) {
+            if (userRepository.findByPhoneAndDeletedFalse(normalizedPhone).isPresent()) {
+                throw new BadRequestException("An account with this phone number already exists");
+            }
+        }
+
+        mobileOtpRepository.invalidatePreviousOtps(normalizedPhone, purpose);
+
         // Rate limiting: max 5 OTPs per hour
         LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
         long recentOtps = mobileOtpRepository.countByPhoneNumberAndCreatedAtAfter(normalizedPhone, oneHourAgo);
@@ -47,11 +66,11 @@ public class OtpService {
 
         MobileOtp otp = MobileOtp.builder()
                 .phoneNumber(normalizedPhone)
-                .otp(otpCode)
+                .otpCode(otpCode)
                 .purpose(purpose)
                 .expiresAt(expiresAt)
                 .verified(false)
-                .attempts(0)
+                .attemptCount(0)
                 .build();
 
         mobileOtpRepository.save(otp);
@@ -64,7 +83,7 @@ public class OtpService {
                 .expiresInSeconds(300)
                 .build();
 
-        if (exposeOtpInResponse || TEST_NUMBERS.contains(normalizedPhone)) {
+        if (testModeEnabled && (exposeOtpInResponse || TEST_NUMBERS.contains(normalizedPhone))) {
             response.setOtp(otpCode);
         }
 
@@ -79,16 +98,18 @@ public class OtpService {
                 .orElseThrow(() -> new BadRequestException("No valid OTP found for this phone number. Or it has expired."));
 
         if (!otp.isValid()) {
-            throw new BadRequestException("OTP has expired or is invalid. Please request a new one.");
+            throw new BadRequestException("Maximum attempts exceeded. Please request a new one.");
         }
 
-        if (otp.getOtp().equals(otpCode)) {
-            otp.setVerified(true);
+        if (otp.getOtpCode().equals(otpCode)) {
+            otp.markVerified();
             mobileOtpRepository.save(otp);
             return true;
         } else {
-            otp.setAttempts(otp.getAttempts() + 1);
-            mobileOtpRepository.save(otp);
+            int updated = mobileOtpRepository.incrementAttemptCountIfUnderLimit(otp.getId(), 3);
+            if (updated == 0) {
+                throw new BadRequestException("Maximum attempts exceeded. Please request a new one.");
+            }
             throw new BadRequestException("Invalid OTP. Please try again.");
         }
     }
@@ -106,19 +127,20 @@ public class OtpService {
     }
 
     public String normalizePhone(String phone) {
-        if (phone == null) return "";
-        String digits = phone.replaceAll("[^0-9]", "");
-        if (digits.length() == 10 && !phone.startsWith("+91")) {
-            return "+91" + digits;
+        if (phone == null || phone.isBlank()) {
+            throw new BadRequestException("Phone number is required");
         }
-        if (phone.startsWith("+") && digits.length() >= 12) {
+        String digits = phone.replaceAll("[^0-9]", "");
+        if (digits.length() == 10) {
+            return "+91" + digits;
+        } else if (digits.length() == 12 && digits.startsWith("91")) {
             return "+" + digits;
         }
-        return digits.startsWith("91") && digits.length() == 12 ? "+" + digits : phone;
+        throw new BadRequestException("Invalid phone number format. Must be a 10-digit Indian number.");
     }
 
     private String generateOtp(String phone) {
-        if (TEST_NUMBERS.contains(phone)) {
+        if (testModeEnabled && TEST_NUMBERS.contains(phone)) {
             return "123456";
         }
         int number = 100000 + secureRandom.nextInt(900000);

@@ -79,6 +79,9 @@ public class AuthenticationService {
 
         Set<UserRole> userRoles = new HashSet<>();
         for (RoleName roleName : request.getRoles()) {
+            if (roleName != RoleName.AGENT && roleName != RoleName.BROKER) {
+                throw new BadRequestException("Only AGENT and BROKER roles can be registered via public signup");
+            }
             UserRole userRole = new UserRole();
             userRole.setUser(user);
             userRole.setRole(roleName);
@@ -169,13 +172,30 @@ public class AuthenticationService {
         }
         
         User user = token.getUser();
+        
+        // Rotate: Delete the consumed token atomically
+        int deleted = refreshTokenRepository.deleteByIdReturningCount(token.getId());
+        if (deleted == 0) {
+            throw new UnauthorizedException("Refresh token has already been consumed");
+        }
+        
+        // Clean up globally expired tokens for this user
+        refreshTokenRepository.deleteExpiredForUser(user, LocalDateTime.now());
+
         com.anverraglobal.insurance.security.UserPrincipal principal = com.anverraglobal.insurance.security.UserPrincipal.create(user);
         Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
         String newAccessToken = jwtService.generateToken(auth);
         
+        String newRefreshTokenString = UUID.randomUUID().toString();
+        RefreshToken newRefreshToken = new RefreshToken();
+        newRefreshToken.setToken(newRefreshTokenString);
+        newRefreshToken.setUser(user);
+        newRefreshToken.setExpiresAt(LocalDateTime.now().plusDays(7)); 
+        refreshTokenRepository.save(newRefreshToken);
+        
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(token.getToken())
+                .refreshToken(newRefreshTokenString)
                 .expiresIn(86400000L) // Default 1 day for now
                 .user(mapToDto(user))
                 .build();
@@ -194,6 +214,9 @@ public class AuthenticationService {
         Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
         String accessToken = jwtService.generateToken(auth);
         String refreshTokenString = UUID.randomUUID().toString();
+        
+        // Clean up globally expired tokens for this user
+        refreshTokenRepository.deleteExpiredForUser(user, LocalDateTime.now());
         
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setToken(refreshTokenString);
@@ -219,6 +242,7 @@ public class AuthenticationService {
                 .email(user.getEmail())
                 .name(user.getName())
                 .phone(user.getPhone())
+                .profileImage(user.getProfileImage())
                 .roles(user.getRoles().stream().map(ur -> ur.getRole()).collect(Collectors.toSet()))
                 .build();
     }

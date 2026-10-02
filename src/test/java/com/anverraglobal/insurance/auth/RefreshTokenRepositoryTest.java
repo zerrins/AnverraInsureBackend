@@ -84,7 +84,7 @@ class RefreshTokenRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("should find token by its string value")
         void shouldFindByTokenString() {
             RefreshToken token = refreshTokenRepository.save(buildToken(testUser, false, false));
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             Optional<RefreshToken> found = refreshTokenRepository.findByToken(token.getToken());
 
@@ -109,10 +109,10 @@ class RefreshTokenRepositoryTest extends AbstractRepositoryTest {
         void shouldRevokeAllByUser() {
             RefreshToken t1 = refreshTokenRepository.save(buildToken(testUser, false, false));
             RefreshToken t2 = refreshTokenRepository.save(buildToken(testUser, false, false));
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             refreshTokenRepository.revokeAllByUser(testUser);
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             RefreshToken r1 = refreshTokenRepository.findById(t1.getId()).orElseThrow();
             RefreshToken r2 = refreshTokenRepository.findById(t2.getId()).orElseThrow();
@@ -124,10 +124,10 @@ class RefreshTokenRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("revokeAllByUserId should revoke tokens for given user ID")
         void shouldRevokeAllByUserId() {
             RefreshToken token = refreshTokenRepository.save(buildToken(testUser, false, false));
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             refreshTokenRepository.revokeAllByUserId(testUser.getId());
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             RefreshToken reloaded = refreshTokenRepository.findById(token.getId()).orElseThrow();
             assertThat(reloaded.isRevoked()).isTrue();
@@ -144,10 +144,10 @@ class RefreshTokenRepositoryTest extends AbstractRepositoryTest {
             RefreshToken active  = refreshTokenRepository.save(buildToken(testUser, false, false));
             RefreshToken expired = refreshTokenRepository.save(buildToken(testUser, true,  false));
             RefreshToken revoked = refreshTokenRepository.save(buildToken(testUser, false, true));
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             refreshTokenRepository.deleteExpiredAndRevoked(LocalDateTime.now());
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             assertThat(refreshTokenRepository.findById(active.getId())).isPresent();
             assertThat(refreshTokenRepository.findById(expired.getId())).isEmpty();
@@ -166,7 +166,7 @@ class RefreshTokenRepositoryTest extends AbstractRepositoryTest {
             refreshTokenRepository.save(buildToken(testUser, false, false)); // valid
             refreshTokenRepository.save(buildToken(testUser, true,  false)); // expired
             refreshTokenRepository.save(buildToken(testUser, false, true));  // revoked
-            refreshTokenRepository.flush();
+            flushAndClear();
 
             long count = refreshTokenRepository.countActiveTokensByUser(testUser, LocalDateTime.now());
 

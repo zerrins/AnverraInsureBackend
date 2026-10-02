@@ -101,4 +101,26 @@ public interface MobileOtpRepository extends JpaRepository<MobileOtp, Long> {
     );
             
     Optional<MobileOtp> findFirstByPhoneNumberAndPurposeAndVerifiedOrderByCreatedAtDesc(String phoneNumber, OtpPurpose purpose, boolean verified);
+
+    /**
+     * Atomically increments the attempt count if it is below the given limit.
+     * Returns the number of rows updated (0 if limit reached or record not found).
+     *
+     * @param id the OTP record ID
+     * @param limit the maximum allowed attempts
+     * @return number of rows updated
+     */
+    @Modifying
+    @Query("UPDATE MobileOtp o SET o.attemptCount = o.attemptCount + 1 WHERE o.id = :id AND o.attemptCount < :limit")
+    int incrementAttemptCountIfUnderLimit(@Param("id") Long id, @Param("limit") int limit);
+
+    /**
+     * Acquires a PostgreSQL transaction-level advisory lock.
+     * This blocks concurrent transactions attempting to acquire a lock with the same key.
+     * The lock is automatically released at the end of the transaction.
+     *
+     * @param lockKey the lock key derived from phone + purpose
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(hashtext(:lockKey))", nativeQuery = true)
+    void acquireAdvisoryLock(@Param("lockKey") String lockKey);
 }

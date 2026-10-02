@@ -118,11 +118,11 @@ class UserRepositoryTest extends AbstractRepositoryTest {
                     .status(UserStatus.ACTIVE)
                     .build();
             userRepository.save(u1);
-            userRepository.flush();
+            flushAndClear();
 
             assertThatThrownBy(() -> {
                 userRepository.save(u2);
-                userRepository.flush();
+                flushAndClear();
             }).isInstanceOf(DataIntegrityViolationException.class);
         }
 
@@ -138,11 +138,11 @@ class UserRepositoryTest extends AbstractRepositoryTest {
                     .status(UserStatus.ACTIVE)
                     .build();
             userRepository.save(u1);
-            userRepository.flush();
+            flushAndClear();
 
             assertThatThrownBy(() -> {
                 userRepository.save(u2);
-                userRepository.flush();
+                flushAndClear();
             }).isInstanceOf(DataIntegrityViolationException.class);
         }
 
@@ -175,10 +175,10 @@ class UserRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("soft-deleted user should not be found by email")
         void softDeletedUserShouldNotBeFoundByEmail() {
             User user = userRepository.save(buildTestUser("020"));
-            userRepository.flush();
+            flushAndClear();
 
             userRepository.softDeleteById(user.getId(), LocalDateTime.now());
-            userRepository.flush();
+            flushAndClear();
 
             Optional<User> found = userRepository.findByEmailAndDeletedFalse("test020@anverraglobal.com");
             assertThat(found).isEmpty();
@@ -188,10 +188,10 @@ class UserRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("soft-deleted user should still exist in DB")
         void softDeletedUserShouldExistInDb() {
             User user = userRepository.save(buildTestUser("021"));
-            userRepository.flush();
+            flushAndClear();
 
             userRepository.softDeleteById(user.getId(), LocalDateTime.now());
-            userRepository.flush();
+            flushAndClear();
 
             // findById (no soft-delete filter) should still find it
             Optional<User> raw = userRepository.findById(user.getId());
@@ -205,10 +205,10 @@ class UserRepositoryTest extends AbstractRepositoryTest {
         void findAllShouldExcludeSoftDeleted() {
             User active = userRepository.save(buildTestUser("022"));
             User toDelete = userRepository.save(buildTestUser("023"));
-            userRepository.flush();
+            flushAndClear();
 
             userRepository.softDeleteById(toDelete.getId(), LocalDateTime.now());
-            userRepository.flush();
+            flushAndClear();
 
             var all = userRepository.findAllByDeletedFalse();
             assertThat(all).extracting(User::getEmail)
@@ -227,11 +227,11 @@ class UserRepositoryTest extends AbstractRepositoryTest {
             User user = buildTestUser("030");
             user.setLoginAttempts(3);
             User saved = userRepository.save(user);
-            userRepository.flush();
+            flushAndClear();
 
             LocalDateTime loginTime = LocalDateTime.now();
             userRepository.recordSuccessfulLogin(saved.getId(), loginTime);
-            userRepository.flush();
+            flushAndClear();
 
             User updated = userRepository.findById(saved.getId()).orElseThrow();
             assertThat(updated.getLoginAttempts()).isZero();
@@ -242,10 +242,10 @@ class UserRepositoryTest extends AbstractRepositoryTest {
         @DisplayName("incrementLoginAttempts should increment counter")
         void incrementLoginAttemptsShouldIncrement() {
             User user = userRepository.save(buildTestUser("031"));
-            userRepository.flush();
+            flushAndClear();
 
             userRepository.incrementLoginAttempts(user.getId());
-            userRepository.flush();
+            flushAndClear();
 
             User updated = userRepository.findById(user.getId()).orElseThrow();
             assertThat(updated.getLoginAttempts()).isEqualTo(1);
@@ -264,7 +264,7 @@ class UserRepositoryTest extends AbstractRepositoryTest {
             user.addRole(RoleName.BROKER);
 
             User saved = userRepository.save(user);
-            userRepository.flush();
+            flushAndClear();
 
             User loaded = userRepository.findById(saved.getId()).orElseThrow();
             assertThat(loaded.getRoles())

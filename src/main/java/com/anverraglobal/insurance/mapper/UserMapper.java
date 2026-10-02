@@ -31,6 +31,7 @@ public class UserMapper {
                 .status(user.getStatus() != null ? user.getStatus().name() : null)
                 .emailVerified(user.isEmailVerified())
                 .phoneVerified(user.isPhoneVerified())
+                .profileImage(user.getProfileImage())
                 .profile(profileToProfileDTO(user.getProfile()))
                 .build();
     }

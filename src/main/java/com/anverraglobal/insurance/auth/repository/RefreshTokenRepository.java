@@ -84,4 +84,26 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
      */
     @Query("SELECT COUNT(rt) FROM RefreshToken rt WHERE rt.user = :user AND rt.revoked = false AND rt.expiresAt > :now")
     long countActiveTokensByUser(@Param("user") User user, @Param("now") LocalDateTime now);
+
+    /**
+     * Physically deletes all expired tokens for a specific user.
+     * Called during login to prevent database bloat.
+     *
+     * @param user the user
+     * @param now  current timestamp
+     */
+    @Modifying
+    @Query("DELETE FROM RefreshToken rt WHERE rt.user = :user AND rt.expiresAt < :now")
+    void deleteExpiredForUser(@Param("user") User user, @Param("now") LocalDateTime now);
+
+    /**
+     * Atomically deletes a refresh token by its ID.
+     * Used during token rotation to ensure single-use semantics and prevent concurrent replays.
+     *
+     * @param id the token ID
+     * @return the number of rows deleted (1 if successful, 0 if already deleted)
+     */
+    @Modifying
+    @Query("DELETE FROM RefreshToken rt WHERE rt.id = :id")
+    int deleteByIdReturningCount(@Param("id") Long id);
 }
